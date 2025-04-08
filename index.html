@@ -4,7 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <title>OMDB Movie Search</title>
+    <script>
+      // Força o tema escuro como padrão
+      (function() {
+        try {
+          const colorMode = localStorage.getItem('chakra-ui-color-mode');
+          if (!colorMode) {
+            localStorage.setItem('chakra-ui-color-mode', 'dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,39 +1,50 @@
-import { Box, Image, Text, VStack, Badge, useColorModeValue } from '@chakra-ui/react';
+import { Box, Image, Text, VStack, useColorModeValue } from '@chakra-ui/react';
 import { Link } from 'react-router-dom';
 
 const MovieCard = ({ movie }) => {
-  const bgColor = useColorModeValue('gray.800', 'gray.700');
-  const textColor = useColorModeValue('white', 'gray.200');
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const hoverBg = useColorModeValue('gray.100', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const yearColor = useColorModeValue('blue.600', 'blue.400');
+  const shadowColor = useColorModeValue('rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.4)');
 
   return (
     <Link to={`/movie/${movie.imdbID}`}>
       <Box
-        h="100%"
+        maxW="sm"
         borderWidth="1px"
         borderRadius="lg"
         overflow="hidden"
         bg={bgColor}
-        _hover={{ transform: 'scale(1.02)', transition: 'transform 0.2s', boxShadow: '0 0 20px rgba(66, 153, 225, 0.5)' }}
+        transition="all 0.3s"
+        _hover={{
+          transform: 'translateY(-4px)',
+          shadow: `0 12px 24px ${shadowColor}`,
+          bg: hoverBg,
+        }}
+        color={textColor}
       >
         <Image
           src={movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450'}
           alt={movie.Title}
-          objectFit="cover"
-          height="400px"
           width="100%"
+          height="400px"
+          objectFit="cover"
           fallbackSrc="https://via.placeholder.com/300x450"
         />
 
         <VStack p={4} align="start" spacing={2}>
-          <Text fontWeight="bold" fontSize="lg" noOfLines={1} color={textColor}>
+          <Text
+            fontSize="xl"
+            fontWeight="semibold"
+            lineHeight="tight"
+            noOfLines={2}
+          >
             {movie.Title}
           </Text>
-          <Text color="blue.400" fontSize="sm">
+          <Text color={yearColor} fontSize="md">
             {movie.Year}
           </Text>
-          <Badge colorScheme="blue" variant="subtle">
-            {movie.Type}
-          </Badge>
         </VStack>
       </Box>
     </Link>

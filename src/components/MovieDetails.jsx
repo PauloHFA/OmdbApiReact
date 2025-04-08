@@ -1,10 +1,11 @@
-import { Box, Image, Text, VStack, HStack, Badge, Divider, Grid, useColorModeValue } from '@chakra-ui/react';
+import { Box, Image, Text, VStack, HStack, Badge, Divider, Grid, useColorModeValue, Button } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getMovieDetails } from '../services/api';
 
 const MovieDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const bgColor = useColorModeValue('gray.800', 'gray.700');
@@ -35,6 +36,15 @@ const MovieDetails = () => {
 
   return (
     <Box maxW="1200px" mx="auto" p={6}>
+      <Button 
+        mb={4} 
+        colorScheme="blue" 
+        variant="outline" 
+        onClick={() => navigate(-1)}
+        _hover={{ bg: 'blue.500', color: 'white' }}
+      >
+        Voltar
+      </Button>
       <Grid templateColumns={{ base: '1fr', md: '300px 1fr' }} gap={6}>
         <Box>
           <Image

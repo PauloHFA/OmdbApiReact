@@ -1,34 +1,20 @@
-import { ChakraProvider, Container, Grid, Heading, VStack, Box, extendTheme, Button, Input, InputGroup, InputRightElement, useColorMode, Spinner, Center, useDisclosure, Text } from '@chakra-ui/react';
+import { ChakraProvider, Container, Grid, Heading, VStack, Box, Button, Input, InputGroup, InputRightElement, useColorMode, Spinner, Center, useDisclosure, Text, Select, HStack, Flex } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { SunIcon, MoonIcon, SearchIcon } from '@chakra-ui/icons';
 import MovieCard from './components/MovieCard';
 import MovieDetails from './components/MovieDetails';
 import GenreMenu from './components/GenreMenu';
+import ThemeToggleButton from './components/ThemeToggleButton';
 import { searchMovies } from './services/api';
-import { SearchIcon } from '@chakra-ui/icons';
-
-const theme = extendTheme({
-  config: {
-    initialColorMode: 'dark',
-    useSystemColorMode: false,
-  },
-  styles: {
-    global: {
-      body: {
-        bg: 'gray.900',
-        color: 'white',
-        minHeight: '100vh',
-        margin: 0,
-        padding: 0,
-      },
-    },
-  },
-});
+import { theme } from './theme';
 
 function App() {
   const [movies, setMovies] = useState([]);
+  const [filteredMovies, setFilteredMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
@@ -36,18 +22,24 @@ function App() {
   const { colorMode, toggleColorMode } = useColorMode();
   const { isOpen } = useDisclosure({ defaultIsOpen: true });
   const observer = useRef();
-  const currentQuery = useRef('2024');
+  const currentQuery = useRef('movie');
+
+  // Array de anos de 1900 até o ano atual
+  const years = Array.from(
+    { length: new Date().getFullYear() - 1900 + 1 },
+    (_, i) => String(new Date().getFullYear() - i)
+  );
 
   const lastMovieElementRef = useCallback(node => {
     if (loading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
+      if (entries[0].isIntersecting && hasMore && !selectedYear) {
         setPage(prevPage => prevPage + 1);
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, hasMore]);
+  }, [loading, hasMore, selectedYear]);
 
   useEffect(() => {
     loadPopularMovies();
@@ -67,13 +59,22 @@ function App() {
     }
   }, [selectedGenre]);
 
+  useEffect(() => {
+    if (selectedYear) {
+      setFilteredMovies(movies.filter(movie => movie.Year === selectedYear));
+    } else {
+      setFilteredMovies(movies);
+    }
+  }, [selectedYear, movies]);
+
   const loadPopularMovies = async () => {
     setLoading(true);
-    currentQuery.current = '2024';
+    currentQuery.current = 'movie';
     try {
-      const data = await searchMovies('2024', 1);
+      const data = await searchMovies('movie', 1);
       if (data.Response === 'True') {
         setMovies(data.Search);
+        setFilteredMovies(data.Search);
         setHasMore(data.totalResults > data.Search.length);
       }
     } catch (error) {
@@ -84,19 +85,26 @@ function App() {
   };
 
   const loadMoreMovies = async () => {
-    if (!hasMore || loading) return;
+    if (!hasMore || loading || selectedYear) return;
     setLoading(true);
     try {
       const data = await searchMovies(currentQuery.current, page);
       if (data.Response === 'True') {
-        setMovies(prevMovies => {
-          // Filter out duplicates based on imdbID
-          const newMovies = data.Search.filter(newMovie => 
-            !prevMovies.some(existingMovie => existingMovie.imdbID === newMovie.imdbID)
-          );
-          return [...prevMovies, ...newMovies];
-        });
-        setHasMore(data.totalResults > movies.length + data.Search.length);
+        const newMovies = data.Search.filter(newMovie => 
+          !movies.some(existingMovie => existingMovie.imdbID === newMovie.imdbID)
+        );
+        
+        setMovies(prevMovies => [...prevMovies, ...newMovies]);
+        
+        // Atualiza os filmes filtrados mantendo o filtro de ano
+        if (selectedYear) {
+          const newFilteredMovies = newMovies.filter(movie => movie.Year === selectedYear);
+          setFilteredMovies(prev => [...prev, ...newFilteredMovies]);
+        } else {
+          setFilteredMovies(prev => [...prev, ...newMovies]);
+        }
+        
+        setHasMore(data.totalResults > (movies.length + newMovies.length));
       }
     } catch (error) {
       console.error('Error loading more movies:', error);
@@ -105,20 +113,103 @@ function App() {
     }
   };
 
+  const loadMoviesByYear = async (year) => {
+    setLoading(true);
+    try {
+      // Lista expandida de termos de busca
+      const searchTerms = [
+        'the', 'a', 'movie', 'film', 'star', 'love',
+        'war', 'life', 'world', 'man', 'day', 'time',
+        'night', 'girl', 'house', 'year', 'story', 'king'
+      ];
+      let allMovies = [];
+      let totalPages = 3; // Número de páginas a buscar por termo
+      
+      // Tenta cada termo de busca
+      for (const term of searchTerms) {
+        // Busca múltiplas páginas para cada termo
+        for (let page = 1; page <= totalPages; page++) {
+          const data = await searchMovies(term, page);
+          if (data.Response === 'True') {
+            // Filtra por ano e remove duplicatas
+            const newMovies = data.Search.filter(movie => 
+              movie.Year === year && 
+              !allMovies.some(m => m.imdbID === movie.imdbID)
+            );
+            allMovies = [...allMovies, ...newMovies];
+            
+            // Se não há mais resultados para este termo, passe para o próximo
+            if (data.Search.length < 10) break;
+          } else {
+            break; // Se não há resultados, passa para o próximo termo
+          }
+        }
+        
+        // Atualiza os resultados a cada termo para mostrar progresso
+        if (allMovies.length > 0) {
+          setMovies(allMovies);
+          setFilteredMovies(allMovies);
+        }
+      }
+
+      if (allMovies.length > 0) {
+        setMovies(allMovies);
+        setFilteredMovies(allMovies);
+        setHasMore(false); // Desativa paginação quando filtrando por ano
+      } else {
+        setMovies([]);
+        setFilteredMovies([]);
+      }
+    } catch (error) {
+      console.error('Error loading movies by year:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleYearChange = (event) => {
+    const year = event.target.value;
+    setSelectedYear(year);
+    if (year) {
+      loadMoviesByYear(year);
+    } else {
+      setFilteredMovies(movies);
+      if (searchQuery.trim()) {
+        handleSearch(searchQuery);
+      } else {
+        loadPopularMovies();
+      }
+    }
+  };
+
   const handleSearch = async (query, isGenreSearch = false) => {
+    if (!query && !selectedYear && !isGenreSearch) {
+      loadPopularMovies();
+      return;
+    }
+
     setLoading(true);
     setIsSearching(true);
     setPage(1);
-    setHasMore(true);
-    currentQuery.current = query;
 
     try {
       const data = await searchMovies(query, 1);
       if (data.Response === 'True') {
-        setMovies(data.Search);
-        setHasMore(data.totalResults > data.Search.length);
+        const newMovies = data.Search;
+        if (selectedYear) {
+          // Se temos um ano selecionado, filtra os resultados
+          const filteredByYear = newMovies.filter(movie => movie.Year === selectedYear);
+          setMovies(newMovies);
+          setFilteredMovies(filteredByYear);
+          setHasMore(false); // Desativa paginação quando filtrando por ano
+        } else {
+          setMovies(newMovies);
+          setFilteredMovies(newMovies);
+          setHasMore(data.totalResults > newMovies.length);
+        }
       } else {
         setMovies([]);
+        setFilteredMovies([]);
         setHasMore(false);
       }
     } catch (error) {
@@ -135,67 +226,84 @@ function App() {
   const handleGenreSelect = (genre) => {
     if (genre === selectedGenre) {
       setSelectedGenre(null);
+      setSelectedYear('');
       loadPopularMovies();
     } else {
       setSelectedGenre(genre);
       setSearchQuery('');
+      handleSearch(genre, true);
     }
   };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      handleSearch(searchQuery);
+    const searchTerm = searchQuery.trim();
+    if (!searchTerm && !selectedYear) {
+      loadPopularMovies();
+    } else {
+      handleSearch(searchTerm);
     }
   };
 
   return (
     <ChakraProvider theme={theme}>
       <Router>
-        <Box minH="100vh" bg="gray.900">
+        <Box minH="100vh" position="relative">
           <GenreMenu selectedGenre={selectedGenre} onSelectGenre={handleGenreSelect} />
-          <Box
-            ml={isOpen ? "250px" : "60px"}
-            transition="margin-left 0.3s ease"
-            minH="100vh"
-            bg="gray.900"
-          >
+          <Box pl={{ base: "60px", md: "250px" }} pt={4}>
             <Container maxW="100%" px={4} py={4}>
               <VStack spacing={4} align="stretch">
-                <Box display="flex" justifyContent="space-between" alignItems="center" px={4}>
-                  <Heading as="h1" size="xl" color="blue.400">
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Heading as="h1" size="xl">
                     Filmes IMDB API
                   </Heading>
-                  <Button onClick={toggleColorMode} colorScheme="blue" variant="outline">
-                    {colorMode === 'light' ? 'Dark Mode' : 'Light Mode'}
-                  </Button>
+                  <ThemeToggleButton />
                 </Box>
 
                 <Box px={4}>
-                  <form onSubmit={handleSearchSubmit}>
-                    <InputGroup size="lg">
-                      <Input
-                        placeholder="Buscar filmes..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        bg="gray.800"
-                        borderColor="blue.500"
-                        _hover={{ borderColor: 'blue.400' }}
-                        _focus={{ borderColor: 'blue.400', boxShadow: '0 0 0 1px blue.400' }}
-                      />
-                      <InputRightElement width="4.5rem">
-                        <Button
-                          type="submit"
-                          h="1.75rem"
-                          size="sm"
-                          colorScheme="blue"
-                          isLoading={loading}
-                        >
-                          <SearchIcon />
-                        </Button>
-                      </InputRightElement>
-                    </InputGroup>
-                  </form>
+                  <HStack spacing={4}>
+                    <Box flex="1">
+                      <form onSubmit={handleSearchSubmit}>
+                        <InputGroup size="lg">
+                          <Input
+                            id="movie-search"
+                            name="movie-search"
+                            placeholder="Buscar filmes..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            variant="outline"
+                          />
+                          <InputRightElement width="4.5rem">
+                            <Button
+                              type="submit"
+                              h="1.75rem"
+                              size="sm"
+                              colorScheme="blue"
+                              isLoading={loading}
+                            >
+                              <SearchIcon />
+                            </Button>
+                          </InputRightElement>
+                        </InputGroup>
+                      </form>
+                    </Box>
+                    <Select
+                      id="year-filter"
+                      name="year-filter"
+                      placeholder="Filtrar por ano"
+                      value={selectedYear}
+                      onChange={handleYearChange}
+                      variant="outline"
+                      w="200px"
+                      size="lg"
+                    >
+                      {years.map(year => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </Select>
+                  </HStack>
                 </Box>
 
                 <Routes>
@@ -213,10 +321,10 @@ function App() {
                           gap={4}
                           px={4}
                         >
-                          {movies.map((movie, index) => (
+                          {filteredMovies.map((movie, index) => (
                             <div
                               key={movie.imdbID}
-                              ref={index === movies.length - 1 ? lastMovieElementRef : null}
+                              ref={index === filteredMovies.length - 1 ? lastMovieElementRef : null}
                             >
                               <MovieCard movie={movie} />
                             </div>
@@ -227,7 +335,7 @@ function App() {
                             <Spinner size="xl" color="blue.400" />
                           </Center>
                         )}
-                        {!loading && movies.length === 0 && (
+                        {!loading && filteredMovies.length === 0 && (
                           <Center py={8}>
                             <Text color="gray.500">Nenhum filme encontrado</Text>
                           </Center>
